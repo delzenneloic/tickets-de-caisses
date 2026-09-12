@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#E8E8E4">
+  <meta name="description" content="Photographiez vos tickets de caisse et classez-les par mois dans votre Google Drive.">
+  <title>Tickets de caisse</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="./" aria-label="Tickets de caisse, accueil"><img src="./icon.svg" width="34" height="34" alt=""><span>Tickets de caisse</span></a>
+    <button id="connect" class="connect" type="button">Connecter Google Drive</button>
+  </header>
+  <main>
+    <div id="message" class="notice" role="status" aria-live="polite" hidden></div>
+    <section id="add-view" aria-labelledby="add-title">
+      <div class="section-heading"><h1 id="add-title">Ajouter un ticket</h1><span class="eyebrow" id="current-month"></span></div>
+      <div class="capture-card" id="drop-zone">
+        <div class="receipt-symbol" aria-hidden="true"><svg viewBox="0 0 48 56" fill="none"><path d="M9 4l5 3 5-3 5 3 5-3 5 3 5-3v48l-5-3-5 3-5-3-5 3-5-3-5 3V4Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M17 19h14M17 27h14M17 37h6m5 0h3" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div>
+        <h2>Un ticket, et c’est classé.</h2>
+        <p>Prenez une photo ou importez vos tickets.</p>
+        <div class="capture-actions">
+          <button class="primary" type="button" id="camera-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l1-2h6l1 2h4v15H4V5h4Z"/><circle cx="12" cy="12" r="4"/></svg>Photographier</button>
+          <button type="button" id="files-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6"/></svg>Importer des fichiers</button>
+        </div>
+        <p class="format-note">Photos et PDF · 25 Mo maximum par fichier</p>
+        <input id="camera-input" type="file" accept="image/*" capture="environment" hidden>
+        <input id="files-input" type="file" accept="image/*,application/pdf,.heic,.heif" multiple hidden>
+      </div>
+      <div class="destination"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 3h9v12H3V6Z"/></svg><div><span class="muted">Classement automatique dans Google Drive</span><p>tickets de caisses <span class="slash">/</span> <strong id="folder-month"></strong></p></div></div>
+      <section class="queue-section" aria-labelledby="queue-title">
+        <div class="section-heading"><h2 id="queue-title">À envoyer <span id="queue-count" class="count">0</span></h2></div>
+        <div id="queue-list"></div>
+        <div id="send-bar" class="send-bar" hidden><p id="send-note" class="muted"></p><button id="send" class="primary" type="button">Envoyer vers Drive</button></div>
+      </section>
+    </section>
+    <section id="history-view" aria-labelledby="history-title" hidden>
+      <div class="section-heading"><h1 id="history-title">Tickets envoyés</h1><a id="open-folder" class="text-link" target="_blank" rel="noopener noreferrer" hidden>Ouvrir le dossier ↗</a></div>
+      <p class="muted history-note">Historique des envois depuis cet appareil. Tous vos fichiers restent dans Google Drive.</p>
+      <div id="history-list"></div>
+    </section>
+    <details class="help">
+      <summary>Comment ça marche ?</summary>
+      <p>Connectez votre compte Google, ajoutez un ou plusieurs tickets, puis touchez « Envoyer vers Drive ». Les dossiers sont créés au premier envoi.</p>
+      <p>Chaque fichier porte la date et l’heure locale du début de son premier envoi, avec trois chiffres pour les millisecondes. Exemple : <code>2026.09.12.091530.398.jpg</code>. Le mois correspond à cette même date.</p>
+      <p>Les tickets en attente sont conservés dans ce navigateur jusqu’à confirmation de Google Drive. Gardez l’application ouverte pendant l’envoi. Si la connexion coupe, relancez l’envoi : il reprend sans créer un second fichier.</p>
+      <p>Pour l’installer sur votre téléphone, utilisez « Ajouter à l’écran d’accueil » ou « Installer l’application » dans le menu du navigateur. Une connexion internet est nécessaire pour envoyer les tickets.</p>
+      <p>La connexion Google utilise le même identifiant d’application que votre suivi musculation. Si Google refuse l’adresse du site, consultez le guide <a href="./LIRE-MOI.md" target="_blank" rel="noopener">LIRE-MOI</a>.</p>
+    </details>
+  </main>
+  <nav class="tabs" aria-label="Navigation principale">
+    <button type="button" id="tab-add" class="active" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Ajouter <span id="tab-count" hidden></span></button>
+    <button type="button" id="tab-history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v19l-3-2-4 2-4-2-3 2V3Zm4 5h6m-6 4h6m-6 4h3"/></svg>Envoyés</button>
+  </nav>
+  <dialog id="preview-dialog"><div class="preview-top"><h2>Aperçu du ticket</h2><button id="close-preview" type="button" aria-label="Fermer l’aperçu">Fermer</button></div><div id="preview-content"></div><p id="preview-name"></p></dialog>
+  <noscript><p>Activez JavaScript pour utiliser cette application.</p></noscript>
+  <script src="./core.js"></script>
+  <script src="./app.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer onload="gsiLoaded()" onerror="gsiFailed()"></script>
+</body>
+</html>
