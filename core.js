@@ -133,7 +133,11 @@
         const metadata = await (await this.request(`${url}?fields=etag,labels,headRevisionId`, { cache: 'no-store' })).json();
         if (metadata.labels?.trashed || !metadata.etag) throw new Error('Le répertoire des enseignes est indisponible. Réessayez.');
         if (!metadata.headRevisionId) continue;
-        const response = await this.request(`${url}?alt=media`, { cache: 'no-store' }, [404]);
+        // Utiliser l'API v3 pour le contenu, comme les autres applications Drive.
+        // v2 reste nécessaire uniquement pour son ETag exposé dans les métadonnées.
+        let response;
+        try { response = await this.request(`${API}/files/${encodeURIComponent(id)}?alt=media`, { cache: 'no-store' }, [404]); }
+        catch (error) { throw new Error('Lecture du contenu des enseignes impossible : ' + error.message); }
         if (response.status === 404) continue;
         const data = await response.json();
         const after = await (await this.request(`${url}?fields=etag,labels,headRevisionId`, { cache: 'no-store' })).json();

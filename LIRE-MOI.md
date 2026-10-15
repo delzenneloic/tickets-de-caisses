@@ -84,7 +84,7 @@ Lors d’une modification du code, changez ensemble `VERSION` dans `sw.js`, `APP
 
 La page ouverte n’est pas rechargée automatiquement. Un bandeau propose **Afficher la nouvelle version** ; le bouton est indisponible pendant un ajout, un envoi, une connexion ou l’enregistrement d’une enseigne. Une fiche ouverte doit être terminée ou fermée. Les tickets en attente restent enregistrés, mais une reconnexion à Google Drive est nécessaire après rechargement. Le bouton **Vérifier les mises à jour** permet de demander une vérification manuelle.
 
-**Ancienne interface sans enseigne :** ouvrez [le lien de mise à jour](https://delzenneloic.github.io/tickets-de-caisses/?v=2026.10.15.3). Il contourne l’ancien cache de la page et de ses scripts. La version `2026.10.15.3`, le champ **Enseigne** et le dossier **A traiter** doivent apparaître. N’effacez pas les données du navigateur : cela supprimerait les tickets en attente. Une fois la mise à jour installée, l’adresse habituelle fonctionne aussi.
+**Ancienne interface sans enseigne :** ouvrez [le lien de mise à jour](https://delzenneloic.github.io/tickets-de-caisses/?v=2026.10.15.4). Il contourne l’ancien cache de la page et de ses scripts. La version `2026.10.15.4`, le champ **Enseigne** et le dossier **A traiter** doivent apparaître. N’effacez pas les données du navigateur : cela supprimerait les tickets en attente. Une fois la mise à jour installée, l’adresse habituelle fonctionne aussi.
 
 ## Vérification
 

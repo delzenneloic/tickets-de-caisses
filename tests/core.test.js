@@ -74,6 +74,22 @@ test('lecture Drive : contenu courant contrôlé, sans ETag de métadonnées sur
   assert.deepEqual(result.data, catalog([]));
   assert.equal(result.etag, '1');
 });
+test('lecture du répertoire rempli : téléchargement v3 et ETag v2 conservé', async () => {
+  const urls = [];
+  const drive = makeDrive(async url => {
+    urls.push(url);
+    if (url.includes('alt=media')) {
+      if (new URL(url).pathname.startsWith('/drive/v2/')) throw new TypeError('Failed to fetch');
+      return json(catalog([entry]));
+    }
+    return json({ etag: 'file-v2-etag', headRevisionId: 'revision-1', labels: { trashed: false } });
+  });
+  const result = await drive.readCatalog('catalog');
+  assert.equal(result.data.merchants[0].id, 1);
+  assert.equal(result.etag, 'file-v2-etag');
+  assert.match(urls[1], /\/drive\/v3\/files\/catalog\?alt=media$/);
+  assert.equal(urls.length, 3);
+});
 test('modification pendant la lecture : rejeter le contenu périmé et recommencer', async () => {
   let version = 1, data = catalog([]), writes = 0, changed = false;
   const drive = makeDrive(async (url, options) => {

@@ -85,7 +85,7 @@ La multiplicité `0..1` couvre le brouillon importé avant sélection. Elle devi
 |---|---|---|
 | Nom, bornes d’ID, recherche, champs requis, répertoire invalide | RG-01 à RG-03 | `tests/core.test.js` : réussi |
 | Répertoire partagé, conflit 412, réponse perdue, pagination | RG-02, RG-07, RG-08 | Réponses Drive simulées : réussi |
-| Lecture contrôlée avant/après, changement pendant la lecture, contenu temporairement ou durablement indisponible | Cohérence du répertoire | 4 régressions ajoutées ; 18 tests métier au total : réussis |
+| Lecture contrôlée avant/après, téléchargement v3 d’un répertoire rempli, changement pendant la lecture, contenu indisponible | Cohérence du répertoire | 5 régressions ajoutées ; 19 tests métier au total : réussis |
 | Dossier, métadonnées, reprise et migration d’un ancien envoi | RG-03 à RG-06, RG-09 | Réponses Drive simulées : réussi |
 | Création, sélection clavier, bouton bloqué sans choix | RG-01, RG-02 | `tests/browser.test.js` : réussi |
 | Coupure, rechargement, reprise, historique, mobile et changement de compte | RG-04 à RG-07 | Navigateur Edge avec Drive simulé : réussi |
@@ -107,3 +107,7 @@ Le message « Le répertoire vient de changer sur un autre appareil » venait de
 La lecture compare `headRevisionId` avant et après téléchargement du contenu courant ; une modification impose de recommencer. L’ETag des métadonnées reste réservé à l’écriture conditionnelle. Le téléchargement direct d’une révision, essayé auparavant, échouait dans le navigateur lors de la recette réelle. Les simulations distinguent ces deux représentations. Les nouveaux tests échouent avec l’ancien code, puis passent après correction ; ils couvrent aussi une modification concurrente et un contenu introuvable. Le critère utilisateur est de pouvoir créer une enseigne depuis un seul appareil, sans faux conflit ni perte des fiches déjà présentes. La recette réelle de création reste à confirmer sur Drive.
 
 Références : [ressource File et headRevisionId](https://developers.google.com/workspace/drive/api/reference/rest/v2/files), [téléchargement d’une revisionId avec files.get](https://developers.google.com/workspace/drive/api/reference/rest/v2/files/get).
+
+### Recette réelle complémentaire
+
+La connexion Google et la création d’une première fiche (ID 1) ont été confirmées sur le compte autorisé. La relecture du répertoire après écriture a ensuite échoué avec le téléchargement v2. La version `2026.10.15.4` lit le contenu avec `files.get?alt=media` de l’API v3, tout en conservant les métadonnées v2 nécessaires à l’écriture conditionnelle. Le contrôle de révision avant/après reste actif. Un test supplémentaire couvre un répertoire rempli avec téléchargement v2 refusé. La relecture réelle, la recherche et le transfert d’un ticket restent à confirmer après déploiement.
