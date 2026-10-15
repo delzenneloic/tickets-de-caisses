@@ -88,6 +88,13 @@ La multiplicité `0..1` couvre le brouillon importé avant sélection. Elle devi
 | Dossier, métadonnées, reprise et migration d’un ancien envoi | RG-03 à RG-06, RG-09 | Réponses Drive simulées : réussi |
 | Création, sélection clavier, bouton bloqué sans choix | RG-01, RG-02 | `tests/browser.test.js` : réussi |
 | Coupure, rechargement, reprise, historique, mobile et changement de compte | RG-04 à RG-07 | Navigateur Edge avec Drive simulé : réussi |
-| OAuth, écritures conditionnelles réelles, initialisation sur deux appareils et contenu reçu | RG-02, RG-04, RG-06, RG-08 | À réaliser avec le compte Google autorisé avant publication |
+| Mise à jour depuis v1 avec un ticket en attente et plusieurs onglets ; installation incomplète ; hors ligne ; saisie préservée | Continuité de service et conservation des données | `tests/update.test.js` : 5 scénarios réussis, service worker actif |
+| OAuth, écritures conditionnelles réelles, initialisation sur deux appareils et contenu reçu | RG-02, RG-04, RG-06, RG-08 | À réaliser avec le compte Google autorisé pour compléter la recette |
 
 Les tests automatisés ne prouvent pas le fonctionnement des permissions réelles de Google. La recette finale doit créer deux enseignes depuis des appareils distincts, vérifier leurs IDs et leurs fiches, envoyer un ticket et contrôler son fichier, son parent, sa propriété `merchantId`, puis interrompre et reprendre un second transfert.
+
+## Retour de recette : mise à jour invisible (15/10/2026)
+
+**Symptôme utilisateur :** l’application publiée reste sans enseigne et envoie encore avec l’ancien nom et l’ancien dossier. **Cause constatée :** le cache hors ligne v1 sert l’ancienne interface ; le service worker v2 attend la fermeture de tous les clients pour s’activer. Le contrôle initial depuis un navigateur neuf ne couvrait pas ce cas.
+
+**Critères ajoutés :** une version installée doit pouvoir évoluer avec plusieurs onglets ouverts ; le ticket local, son contenu et les saisies en cours doivent être préservés ; une installation incomplète ne doit pas remplacer une version fonctionnelle ; le rechargement doit rester un choix explicite. La correction associe ressources versionnées, activation immédiate du cache et bandeau de rechargement protégé. La recette automatisée part des vrais fichiers du commit initial, conserve un PDF en attente et vérifie son contenu après deux migrations.

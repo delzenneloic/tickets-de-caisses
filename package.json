@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/core.test.js",
-    "test:browser": "node tests/browser.test.js"
+    "test:browser": "node tests/browser.test.js",
+    "test:update": "node tests/update.test.js"
   },
   "devDependencies": {
     "playwright": "1.62.1"

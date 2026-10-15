@@ -80,7 +80,11 @@ Les accès Google restent uniquement en mémoire et ne sont pas enregistrés sur
 
 L’application fonctionne sans dépendance à installer : `index.html`, `style.css`, `app.js`, `core.js`, `manifest.json`, `sw.js` et les trois icônes. Le guide peut être laissé à côté des fichiers.
 
-Lors d’une modification du code, augmentez le suffixe de version de `CACHE` dans `sw.js` (par exemple `v1` vers `v2`) puis remplacez les fichiers sur votre hébergement. Fermez toutes les fenêtres de l’application puis rouvrez-la pour activer la mise à jour. Le cache de cette application est isolé par chemin et ne supprime pas celui de Muscu.
+Lors d’une modification du code, changez ensemble `VERSION` dans `sw.js`, `APP_VERSION` dans `app.js`, la version affichée et les trois suffixes `?v=` dans `index.html`. Publiez les fichiers ensemble. L’installation télécharge les ressources sans réutiliser le cache HTTP et active le nouveau service worker sans attendre la fermeture des anciens onglets. Un téléchargement incomplet laisse l’ancienne version active. Le cache reste isolé par chemin et ne supprime pas celui de Muscu ; IndexedDB n’est jamais effacé par une mise à jour.
+
+La page ouverte n’est pas rechargée automatiquement. Un bandeau propose **Afficher la nouvelle version** ; le bouton est indisponible pendant un ajout, un envoi, une connexion ou l’enregistrement d’une enseigne. Une fiche ouverte doit être terminée ou fermée. Les tickets en attente restent enregistrés, mais une reconnexion à Google Drive est nécessaire après rechargement. Le bouton **Vérifier les mises à jour** permet de demander une vérification manuelle.
+
+**Ancienne interface sans enseigne :** ouvrez [le lien de mise à jour](https://delzenneloic.github.io/tickets-de-caisses/?v=2026.10.15.1). Il contourne l’ancien cache de la page et de ses scripts. La version `2026.10.15.1`, le champ **Enseigne** et le dossier **A traiter** doivent apparaître. N’effacez pas les données du navigateur : cela supprimerait les tickets en attente. Une fois la mise à jour installée, l’adresse habituelle fonctionne aussi.
 
 ## Vérification
 

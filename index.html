@@ -9,7 +9,7 @@
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon-192.png">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=2026.10.15.1">
 </head>
 <body>
   <header class="top">
@@ -17,6 +17,11 @@
     <button id="connect" class="connect" type="button">Connecter Google Drive</button>
   </header>
   <main>
+    <section id="update-notice" class="notice" role="status" hidden>
+      <p>Une nouvelle version est prête. Vos tickets en attente sont conservés.</p>
+      <button id="apply-update" type="button">Afficher la nouvelle version</button>
+      <p id="update-help" class="muted"></p>
+    </section>
     <div id="message" class="notice" role="status" aria-live="polite" hidden></div>
     <section id="add-view" aria-labelledby="add-title">
       <div class="section-heading"><h1 id="add-title">Ajouter un ticket</h1><span class="eyebrow" id="current-month"></span></div>
@@ -66,6 +71,7 @@
       <p>Pour l’installer sur votre téléphone, utilisez « Ajouter à l’écran d’accueil » ou « Installer l’application » dans le menu du navigateur. Une connexion internet est nécessaire pour envoyer les tickets.</p>
       <p>La connexion Google utilise le même identifiant d’application que votre suivi musculation. Si Google refuse l’adresse du site, consultez le guide <a href="./LIRE-MOI.md" target="_blank" rel="noopener">LIRE-MOI</a>.</p>
     </details>
+    <div class="app-version"><span>Version <span id="app-version">2026.10.15.1</span></span><button id="check-update" type="button">Vérifier les mises à jour</button><span id="update-status" role="status"></span></div>
   </main>
   <nav class="tabs" aria-label="Navigation principale">
     <button type="button" id="tab-add" class="active" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Ajouter <span id="tab-count" hidden></span></button>
@@ -84,8 +90,8 @@
     </form>
   </dialog>
   <noscript><p>Activez JavaScript pour utiliser cette application.</p></noscript>
-  <script src="./core.js"></script>
-  <script src="./app.js"></script>
+  <script src="./core.js?v=2026.10.15.1"></script>
+  <script src="./app.js?v=2026.10.15.1"></script>
   <script src="https://accounts.google.com/gsi/client" async defer onload="gsiLoaded()" onerror="gsiFailed()"></script>
 </body>
 </html>

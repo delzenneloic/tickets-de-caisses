@@ -1,4 +1,5 @@
 'use strict';
+const APP_VERSION = '2026.10.15.1';
 
 // Identifiant public repris de l'application Muscu fournie. Aucun secret à ajouter.
 const CLIENT_ID = '4855509636-ivkbqfrh8q2f7orpj50e7cgltkfm2vda.apps.googleusercontent.com';
@@ -14,6 +15,7 @@ let currentView = 'add', rootFolderId = null, lastTimestamp = 0;
 let previewUrl = null;
 let merchants = [], selectedMerchant = null, merchantsReady = false, loadingMerchants = false, creatingMerchant = false;
 let merchantLoadVersion = 0, activeMerchantIndex = -1;
+let serviceWorkerRegistration, updateAvailable = false;
 const thumbnails = new Map();
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel(DB_NAME) : null;
 const drive = new Drive({ getToken: () => token && token.expires > Date.now() + 10000 ? token.value : null, onExpired: () => { token = null; renderConnection(); } });
@@ -105,6 +107,7 @@ function thumbnail(item) {
   return item.extension.toUpperCase();
 }
 function render() {
+  renderUpdate();
   const now = new Date();
   $('current-month').textContent = now.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
   $('folder-month').textContent = naming(now, '').month;
@@ -380,12 +383,52 @@ window.addEventListener('online', () => { render(); if (!busy) notify('Connexion
 window.addEventListener('beforeunload', event => { if (busy || adding || creatingMerchant) { event.preventDefault(); event.returnValue = ''; } });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !busy && !adding && ready) refresh().catch(() => {}); });
 
+function renderUpdate() {
+  const pendingWork = busy || adding || creatingMerchant || connecting || !ready;
+  $('apply-update').disabled = pendingWork;
+  $('update-help').textContent = pendingWork ? 'La mise à jour sera possible une fois l’opération en cours terminée.' : 'Terminez ou fermez une fiche en cours avant de recharger. Une reconnexion à Google Drive sera nécessaire.';
+}
+function receiveVersion(event) {
+  if (event.source !== navigator.serviceWorker.controller || event.data?.type !== 'APP_VERSION') return;
+  updateAvailable = event.data.version !== APP_VERSION;
+  $('update-notice').hidden = !updateAvailable;
+  $('update-status').textContent = updateAvailable ? 'Nouvelle version disponible.' : 'Vous utilisez la dernière version installée.';
+  renderUpdate();
+}
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator) || !window.isSecureContext) { $('check-update').hidden = true; return; }
+  const askVersion = () => navigator.serviceWorker.controller?.postMessage({ type: 'GET_VERSION' });
+  navigator.serviceWorker.addEventListener('message', receiveVersion);
+  navigator.serviceWorker.addEventListener('controllerchange', askVersion);
+  try {
+    serviceWorkerRegistration = await navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' });
+    askVersion();
+  } catch { $('update-status').textContent = 'Mise à jour indisponible. Réessayez avec une connexion internet.'; }
+}
+$('apply-update').addEventListener('click', () => {
+  if (!updateAvailable || busy || adding || creatingMerchant || connecting || !ready) return;
+  if ($('merchant-dialog').open) { $('update-help').textContent = 'Terminez ou fermez la fiche enseigne avant de recharger.'; return; }
+  location.replace(new URL('./', location.href).href);
+});
+$('check-update').addEventListener('click', async () => {
+  $('check-update').disabled = true; $('update-status').textContent = 'Recherche de mise à jour…';
+  try {
+    if (!navigator.onLine) throw new Error('offline');
+    if (!serviceWorkerRegistration) await registerServiceWorker();
+    if (!serviceWorkerRegistration) throw new Error('unavailable');
+    await serviceWorkerRegistration.update();
+    if (serviceWorkerRegistration.installing) $('update-status').textContent = 'Téléchargement de la nouvelle version…';
+    else navigator.serviceWorker.controller?.postMessage({ type: 'GET_VERSION' });
+  } catch { $('update-status').textContent = 'Vérification impossible. Réessayez avec une connexion internet.'; }
+  finally { $('check-update').disabled = false; }
+});
+
 async function init() {
   render();
   if (location.protocol === 'file:') { notify('Ouvrez cette application depuis une adresse web HTTPS, comme votre suivi musculation. Le guide LIRE-MOI explique la mise en place.', 'error'); return; }
   try { db = await openDatabase(); records = await storage('getAll'); ready = true; render(); }
   catch { notify('Le stockage de ce navigateur est indisponible. Essayez dans une fenêtre normale ou un autre navigateur.', 'error'); return; }
   if (!navigator.onLine) notify('Hors ligne. Vos tickets restent sur cet appareil jusqu’à leur envoi.');
-  if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
+  registerServiceWorker();
 }
 init();
