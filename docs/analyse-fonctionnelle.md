@@ -6,7 +6,7 @@ Version du 15 octobre 2026.
 
 L’utilisateur souhaite déposer une preuve d’achat à traiter, déjà rattachée au bon magasin ou restaurant. Le travail d’analyse consiste à transformer ce besoin en parcours, règles de gestion, données et critères de recette vérifiables : le ticket est-il associé à une enseigne existante ? Quand l’association devient-elle stable ? Que faire en cas de coupure ou de changement de compte ?
 
-Le besoin et le choix d’un répertoire partagé via Drive ont été précisés par Loïc. La réalisation et les tests automatisés ont été effectués avec l’assistant. La recette avec le vrai compte Google reste à effectuer par l’utilisateur.
+Le besoin et le choix d’un répertoire partagé via Drive ont été précisés par Loïc. La réalisation et les tests automatisés ont été effectués avec l’assistant. La recette réelle des enseignes a été menée dans le navigateur, après connexion Google validée par l’utilisateur ; les envois réels et la concurrence entre appareils restent à valider.
 
 ## Périmètre et décisions
 
@@ -86,11 +86,13 @@ La multiplicité `0..1` couvre le brouillon importé avant sélection. Elle devi
 | Nom, bornes d’ID, recherche, champs requis, répertoire invalide | RG-01 à RG-03 | `tests/core.test.js` : réussi |
 | Répertoire partagé, conflit 412, réponse perdue, pagination | RG-02, RG-07, RG-08 | Réponses Drive simulées : réussi |
 | Lecture contrôlée avant/après, téléchargement v3 d’un répertoire rempli, changement pendant la lecture, contenu indisponible | Cohérence du répertoire | 5 régressions ajoutées ; 19 tests métier au total : réussis |
+| Téléchargement interrompu, refus d’accès, arrêt borné, sélection préservée et disparition d’une erreur après reprise | Continuité de service, RG-01 et RG-07 | 2 tests métier supplémentaires et 1 parcours navigateur : réussis ; 21 tests métier et 7 parcours au total |
 | Dossier, métadonnées, reprise et migration d’un ancien envoi | RG-03 à RG-06, RG-09 | Réponses Drive simulées : réussi |
 | Création, sélection clavier, bouton bloqué sans choix | RG-01, RG-02 | `tests/browser.test.js` : réussi |
 | Coupure, rechargement, reprise, historique, mobile et changement de compte | RG-04 à RG-07 | Navigateur Edge avec Drive simulé : réussi |
 | Mise à jour depuis v1 avec un ticket en attente et plusieurs onglets ; installation incomplète ; hors ligne ; saisie préservée | Continuité de service et conservation des données | `tests/update.test.js` : 5 scénarios réussis, service worker actif |
-| OAuth, écritures conditionnelles réelles, initialisation sur deux appareils et contenu reçu | RG-02, RG-04, RG-06, RG-08 | À réaliser avec le compte Google autorisé pour compléter la recette |
+| OAuth, création réelle, relecture après reconnexion, recherche par sous-chaîne et sélection | RG-01 à RG-03 | Réussi sur Drive : première enseigne ID 1 retrouvée ; une actualisation a nécessité un nouvel essai |
+| Concurrence réelle, initialisation sur deux appareils, contenu et classement du ticket reçu | RG-02, RG-04, RG-06, RG-08 | À réaliser avec le compte Google autorisé pour compléter la recette |
 
 Les tests automatisés ne prouvent pas le fonctionnement des permissions réelles de Google. La recette finale doit créer deux enseignes depuis des appareils distincts, vérifier leurs IDs et leurs fiches, envoyer un ticket et contrôler son fichier, son parent, sa propriété `merchantId`, puis interrompre et reprendre un second transfert.
 
@@ -104,10 +106,12 @@ Les tests automatisés ne prouvent pas le fonctionnement des permissions réelle
 
 Le message « Le répertoire vient de changer sur un autre appareil » venait de trois réponses 412 lors du téléchargement du répertoire, avant toute écriture de la fiche. Le code envoyait l’ETag du JSON de métadonnées comme condition de téléchargement du contenu. Le simulateur initial acceptait cette hypothèse et masquait le défaut.
 
-La lecture compare `headRevisionId` avant et après téléchargement du contenu courant ; une modification impose de recommencer. L’ETag des métadonnées reste réservé à l’écriture conditionnelle. Le téléchargement direct d’une révision, essayé auparavant, échouait dans le navigateur lors de la recette réelle. Les simulations distinguent ces deux représentations. Les nouveaux tests échouent avec l’ancien code, puis passent après correction ; ils couvrent aussi une modification concurrente et un contenu introuvable. Le critère utilisateur est de pouvoir créer une enseigne depuis un seul appareil, sans faux conflit ni perte des fiches déjà présentes. La recette réelle de création reste à confirmer sur Drive.
+La lecture compare `headRevisionId` avant et après téléchargement du contenu courant ; une modification impose de recommencer. L’ETag des métadonnées reste réservé à l’écriture conditionnelle. Le téléchargement direct d’une révision, essayé auparavant, échouait dans le navigateur lors de la recette réelle. Les simulations distinguent ces deux représentations. Les nouveaux tests échouent avec l’ancien code, puis passent après correction ; ils couvrent aussi une modification concurrente et un contenu introuvable. Le critère utilisateur est de pouvoir créer une enseigne depuis un seul appareil, sans faux conflit ni perte des fiches déjà présentes. La création réelle d’une première fiche a ensuite été confirmée sur Drive.
 
 Références : [ressource File et headRevisionId](https://developers.google.com/workspace/drive/api/reference/rest/v2/files), [téléchargement d’une revisionId avec files.get](https://developers.google.com/workspace/drive/api/reference/rest/v2/files/get).
 
 ### Recette réelle complémentaire
 
-La connexion Google et la création d’une première fiche (ID 1) ont été confirmées sur le compte autorisé. La relecture du répertoire après écriture a ensuite échoué avec le téléchargement v2. La version `2026.10.15.4` lit le contenu avec `files.get?alt=media` de l’API v3, tout en conservant les métadonnées v2 nécessaires à l’écriture conditionnelle. Le contrôle de révision avant/après reste actif. Un test supplémentaire couvre un répertoire rempli avec téléchargement v2 refusé. La relecture réelle, la recherche et le transfert d’un ticket restent à confirmer après déploiement.
+La connexion Google et la création d’une première fiche (ID 1) ont été confirmées sur le compte autorisé. La relecture du répertoire après écriture a ensuite échoué avec le téléchargement v2. La version `2026.10.15.4` lit le contenu avec `files.get?alt=media` de l’API v3, tout en conservant les métadonnées v2 nécessaires à l’écriture conditionnelle. Le contrôle de révision avant/après reste actif. Un test supplémentaire couvre un répertoire rempli avec téléchargement v2 refusé.
+
+Après déploiement, la fiche a été retrouvée dans une nouvelle session : une sous-chaîne de son nom suffit à l’afficher ; la sélection montre ID 000001, adresse et TVA. Une actualisation a échoué au téléchargement, puis le nouvel essai a réussi. La cause réseau exacte n’est pas déterminée. La version `2026.10.15.5` limite la reprise à trois tentatives, espacées de 500 puis 1000 ms, sur erreur réseau, 429 ou 5xx ; les refus 401/403 ne sont pas retentés. Une erreur persistante bloque toujours l’envoi, mais préserve le choix pour une prochaine relecture ; un succès remplace l’ancien message d’erreur. Ces comportements sont vérifiés automatiquement. La reprise automatique réelle, le transfert d’un ticket et les essais sur deux appareils restent à confirmer.

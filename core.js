@@ -48,6 +48,7 @@
     return { extension, mimeType: TYPES[extension] };
   }
   const queryEscape = value => String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  class DriveConnectionError extends Error {}
   class DriveError extends Error {
     constructor(status, detail = {}) {
       const reason = detail.error?.errors?.[0]?.reason || '';
@@ -62,8 +63,9 @@
     }
   }
   class Drive {
-    constructor({ getToken, fetcher = (...args) => fetch(...args), onExpired = () => {} }) {
+    constructor({ getToken, fetcher = (...args) => fetch(...args), onExpired = () => {}, wait = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
       this.getToken = getToken; this.fetcher = fetcher; this.onExpired = onExpired;
+      this.wait = wait;
       this.folders = new Map();
     }
     async request(url, options = {}, allowed = []) {
@@ -75,7 +77,7 @@
       try {
         response = await this.fetcher(url, { ...options, signal: controller.signal, headers: { ...options.headers, Authorization: `Bearer ${token}` } });
       } catch (error) {
-        throw new Error(error.name === 'AbortError' ? 'L’envoi a pris trop de temps. Votre ticket est conservé ; réessayez.' : 'Connexion interrompue. Votre ticket est conservé ; réessayez.');
+        throw new DriveConnectionError(error.name === 'AbortError' ? 'L’envoi a pris trop de temps. Votre ticket est conservé ; réessayez.' : 'Connexion interrompue. Votre ticket est conservé ; réessayez.');
       } finally { clearTimeout(timer); }
       if (response.status === 401) this.onExpired();
       if (!response.ok && !allowed.includes(response.status)) {
@@ -137,7 +139,15 @@
         // v2 reste nécessaire uniquement pour son ETag exposé dans les métadonnées.
         let response;
         try { response = await this.request(`${API}/files/${encodeURIComponent(id)}?alt=media`, { cache: 'no-store' }, [404]); }
-        catch (error) { throw new Error('Lecture du contenu des enseignes impossible : ' + error.message); }
+        catch (error) {
+          // Une relecture peut réussir après une erreur réseau temporaire. Seul ce
+          // téléchargement est retenté ; les écritures ne sont jamais rejouées ici.
+          if (attempt < 2 && (error instanceof DriveConnectionError || error.status === 429 || error.status >= 500)) {
+            await this.wait(500 * 2 ** attempt);
+            continue;
+          }
+          throw new Error('Lecture du contenu des enseignes impossible : ' + error.message);
+        }
         if (response.status === 404) continue;
         const data = await response.json();
         const after = await (await this.request(`${url}?fields=etag,labels,headRevisionId`, { cache: 'no-store' })).json();

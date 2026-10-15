@@ -20,7 +20,7 @@ let browser;
   const url = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}) });
   const context = await browser.newContext({ serviceWorkers: 'block', hasTouch: true, viewport: { width: 1180, height: 950 } });
-  let catalog = null, version = 1, counter = 0, failUpload = false, currentAccount = 'account-a';
+  let catalog = null, version = 1, counter = 0, failUpload = false, failedReads = 0, currentAccount = 'account-a';
   const folders = [], uploads = new Map(), sessions = new Map(), errors = [];
   await context.route('https://accounts.google.com/gsi/client', route => route.fulfill({ contentType: 'text/javascript', body: `window.google={accounts:{oauth2:{hasGrantedAllScopes:()=>true,initTokenClient:config=>({requestAccessToken:()=>config.callback({access_token:'mock',expires_in:3600})})}}};` }));
   await context.route('https://www.googleapis.com/**', async route => {
@@ -45,6 +45,7 @@ let browser;
       return reply({ etag: String(version), headRevisionId: 'revision-' + version, labels: { trashed: false } });
     }
     if (parsed.pathname === '/drive/v3/files/catalog' && parsed.searchParams.get('alt') === 'media') {
+      if (failedReads > 0) { failedReads--; return route.abort('failed'); }
       if (req.headers()['if-match']) return reply({}, 412);
       if (parsed.searchParams.has('revisionId')) return route.abort('failed');
       return reply(catalog);
@@ -87,6 +88,23 @@ let browser;
   await page.locator('#merchant-search').press('ArrowDown'); await page.locator('#merchant-search').press('Enter');
   assert.equal(await page.locator('#send').isEnabled(), true);
   console.log('PASS recherche par sous-chaîne et sélection au clavier');
+  failedReads = 1;
+  await page.locator('#refresh-merchants').click();
+  await page.waitForFunction(() => !document.getElementById('merchant-search').disabled);
+  assert.equal(failedReads, 0); assert.equal(await page.locator('#send').isEnabled(), true);
+  assert.match(await page.locator('#merchant-selection').textContent(), /000001/);
+  failedReads = 3;
+  await page.locator('#refresh-merchants').click();
+  await page.waitForFunction(() => document.getElementById('message').textContent.includes('Lecture du contenu des enseignes impossible'));
+  assert.equal(await page.locator('#send').isDisabled(), true);
+  assert.equal(await page.locator('#queue-count').textContent(), '1');
+  assert.match(await page.locator('#merchant-selection').textContent(), /000001/);
+  await page.locator('#refresh-merchants').click();
+  await page.waitForFunction(() => !document.getElementById('merchant-search').disabled);
+  assert.equal(await page.locator('#send').isEnabled(), true);
+  assert.equal(await page.locator('#message').textContent(), 'Répertoire des enseignes actualisé.');
+  assert.equal(await page.locator('#message').getAttribute('class'), 'notice');
+  console.log('PASS actualisation intermittente, arrêt borné, choix et ticket préservés, erreur effacée après reprise');
   failUpload = true; await page.locator('#send').click();
   await page.waitForFunction(() => document.querySelector('#queue-list .ticket-error')?.textContent.includes('Connexion interrompue')).catch(async error => { console.log(await page.locator('main').innerText()); throw error; });
   const pendingName = await page.locator('.ticket-detail').first().textContent();

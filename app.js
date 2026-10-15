@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '2026.10.15.4';
+const APP_VERSION = '2026.10.15.5';
 
 // Identifiant public repris de l'application Muscu fournie. Aucun secret à ajouter.
 const CLIENT_ID = '4855509636-ivkbqfrh8q2f7orpj50e7cgltkfm2vda.apps.googleusercontent.com';
@@ -91,8 +91,11 @@ async function loadMerchants() {
       selectedMerchant = list.find(item => item.id === selectedMerchant.id) || null;
       $('merchant-search').value = selectedMerchant?.name || '';
     }
+    notify('Répertoire des enseignes actualisé.');
   } catch (error) {
-    if (version === merchantLoadVersion) { selectedMerchant = null; merchants = []; notify(error.message, 'error'); }
+    // Garder le choix en mémoire pour la prochaine relecture. L’envoi reste
+    // désactivé tant que merchantsReady est faux ; changer de compte le réinitialise.
+    if (version === merchantLoadVersion) notify(error.message, 'error');
   } finally { if (version === merchantLoadVersion) { loadingMerchants = false; render(); } }
 }
 function resetMerchants() {

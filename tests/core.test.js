@@ -111,6 +111,37 @@ test('modification pendant la lecture : rejeter le contenu périmé et recommenc
   assert.deepEqual(data.merchants.map(item => item.id), [1, 2]);
   assert.equal(writes, 1);
 });
+
+test('lecture interrompue : deux nouveaux essais bornés puis relecture cohérente', async () => {
+  let downloads = 0, metadataReads = 0;
+  const waits = [];
+  const drive = new Drive({ getToken: () => 'test-only', wait: async ms => waits.push(ms), fetcher: async (url, options) => {
+    assert.equal(options.method, undefined);
+    if (url.includes('alt=media')) {
+      if (++downloads <= 2) throw new TypeError('Failed to fetch');
+      return json(catalog([entry]));
+    }
+    metadataReads++; return json({ etag: 'e1', headRevisionId: 'r1', labels: { trashed: false } });
+  } });
+  assert.equal((await drive.readCatalog('catalog')).data.merchants[0].id, 1);
+  assert.equal(downloads, 3); assert.equal(metadataReads, 4);
+  assert.deepEqual(waits, [500, 1000]);
+});
+
+test('lecture : arrêt après trois échecs réseau et aucun nouvel essai sur refus d’accès', async () => {
+  for (const status of [0, 503, 429, 401, 403]) {
+    let downloads = 0, expired = 0;
+    const drive = new Drive({ getToken: () => 'test-only', wait: async () => {}, onExpired: () => expired++, fetcher: async url => {
+      if (!url.includes('alt=media')) return json({ etag: 'e1', headRevisionId: 'r1', labels: { trashed: false } });
+      downloads++;
+      if (!status) throw new TypeError('Failed to fetch');
+      return json({}, status);
+    } });
+    await assert.rejects(drive.readCatalog('catalog'), /Lecture du contenu des enseignes impossible/);
+    assert.equal(downloads, status === 401 || status === 403 ? 1 : 3);
+    assert.equal(expired, status === 401 ? 1 : 0);
+  }
+});
 test('contenu temporairement introuvable : relire les métadonnées et réessayer', async () => {
   let reads = 0, downloads = 0;
   const result = await makeDrive(async url => {
