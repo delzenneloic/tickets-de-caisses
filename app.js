@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '2026.10.15.2';
+const APP_VERSION = '2026.10.15.3';
 
 // Identifiant public repris de l'application Muscu fournie. Aucun secret à ajouter.
 const CLIENT_ID = '4855509636-ivkbqfrh8q2f7orpj50e7cgltkfm2vda.apps.googleusercontent.com';

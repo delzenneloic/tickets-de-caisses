@@ -125,17 +125,21 @@
     }
     async readCatalog(id) {
       // L'ETag décrit la ressource File, pas la représentation alt=media.
-      // Lire la révision désignée par ces métadonnées donne un contenu cohérent
-      // sans envoyer cet ETag au téléchargement. Il reste utilisé à l'écriture.
+      // Encadrer le téléchargement courant par deux lectures de headRevisionId
+      // évite les téléchargements de révision redirigés hors de l'API dans certains
+      // navigateurs. Un changement de contenu impose une nouvelle lecture.
       const url = `https://www.googleapis.com/drive/v2/files/${encodeURIComponent(id)}`;
       for (let attempt = 0; attempt < 3; attempt++) {
         const metadata = await (await this.request(`${url}?fields=etag,labels,headRevisionId`, { cache: 'no-store' })).json();
         if (metadata.labels?.trashed || !metadata.etag) throw new Error('Le répertoire des enseignes est indisponible. Réessayez.');
         if (!metadata.headRevisionId) continue;
-        const params = new URLSearchParams({ alt: 'media', revisionId: metadata.headRevisionId });
-        const response = await this.request(`${url}?${params}`, { cache: 'no-store' }, [404]);
+        const response = await this.request(`${url}?alt=media`, { cache: 'no-store' }, [404]);
         if (response.status === 404) continue;
-        return { id, etag: metadata.etag, data: validateCatalog(await response.json()) };
+        const data = await response.json();
+        const after = await (await this.request(`${url}?fields=etag,labels,headRevisionId`, { cache: 'no-store' })).json();
+        if (after.labels?.trashed || !after.etag) throw new Error('Le répertoire des enseignes est indisponible. Réessayez.');
+        if (metadata.headRevisionId !== after.headRevisionId) continue;
+        return { id, etag: after.etag, data: validateCatalog(data) };
       }
       throw new Error('Impossible de lire une version stable du répertoire. Actualisez les enseignes puis réessayez.');
     }

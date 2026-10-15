@@ -85,7 +85,7 @@ La multiplicité `0..1` couvre le brouillon importé avant sélection. Elle devi
 |---|---|---|
 | Nom, bornes d’ID, recherche, champs requis, répertoire invalide | RG-01 à RG-03 | `tests/core.test.js` : réussi |
 | Répertoire partagé, conflit 412, réponse perdue, pagination | RG-02, RG-07, RG-08 | Réponses Drive simulées : réussi |
-| Lecture par révision, changement pendant la lecture, révision disparue ou indisponible | Cohérence du répertoire | 4 régressions ajoutées ; 18 tests métier au total : réussis |
+| Lecture contrôlée avant/après, changement pendant la lecture, contenu temporairement ou durablement indisponible | Cohérence du répertoire | 4 régressions ajoutées ; 18 tests métier au total : réussis |
 | Dossier, métadonnées, reprise et migration d’un ancien envoi | RG-03 à RG-06, RG-09 | Réponses Drive simulées : réussi |
 | Création, sélection clavier, bouton bloqué sans choix | RG-01, RG-02 | `tests/browser.test.js` : réussi |
 | Coupure, rechargement, reprise, historique, mobile et changement de compte | RG-04 à RG-07 | Navigateur Edge avec Drive simulé : réussi |
@@ -104,6 +104,6 @@ Les tests automatisés ne prouvent pas le fonctionnement des permissions réelle
 
 Le message « Le répertoire vient de changer sur un autre appareil » venait de trois réponses 412 lors du téléchargement du répertoire, avant toute écriture de la fiche. Le code envoyait l’ETag du JSON de métadonnées comme condition de téléchargement du contenu. Le simulateur initial acceptait cette hypothèse et masquait le défaut.
 
-La lecture utilise désormais la révision du contenu désignée par `headRevisionId` ; l’ETag des métadonnées reste réservé à l’écriture conditionnelle. Les simulations distinguent ces deux représentations. Les nouveaux tests échouent avec l’ancien code, puis passent après correction ; ils couvrent aussi une modification concurrente et une révision disparue. Le critère utilisateur est de pouvoir créer une enseigne depuis un seul appareil, sans faux conflit ni perte des fiches déjà présentes. La recette réelle de création reste à confirmer sur Drive.
+La lecture compare `headRevisionId` avant et après téléchargement du contenu courant ; une modification impose de recommencer. L’ETag des métadonnées reste réservé à l’écriture conditionnelle. Le téléchargement direct d’une révision, essayé auparavant, échouait dans le navigateur lors de la recette réelle. Les simulations distinguent ces deux représentations. Les nouveaux tests échouent avec l’ancien code, puis passent après correction ; ils couvrent aussi une modification concurrente et un contenu introuvable. Le critère utilisateur est de pouvoir créer une enseigne depuis un seul appareil, sans faux conflit ni perte des fiches déjà présentes. La recette réelle de création reste à confirmer sur Drive.
 
 Références : [ressource File et headRevisionId](https://developers.google.com/workspace/drive/api/reference/rest/v2/files), [téléchargement d’une revisionId avec files.get](https://developers.google.com/workspace/drive/api/reference/rest/v2/files/get).

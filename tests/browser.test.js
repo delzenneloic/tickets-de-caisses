@@ -43,7 +43,7 @@ let browser;
     if (parsed.pathname === '/drive/v2/files/catalog') {
       if (parsed.searchParams.get('alt') === 'media') {
         if (req.headers()['if-match']) return reply({}, 412);
-        if (parsed.searchParams.get('revisionId') !== 'revision-' + version) return reply({}, 404);
+        if (parsed.searchParams.has('revisionId')) return route.abort('failed');
         return reply(catalog);
       }
       return reply({ etag: String(version), headRevisionId: 'revision-' + version, labels: { trashed: false } });
