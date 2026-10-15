@@ -18,8 +18,12 @@ function registryServer() {
       if (lost) { lost = false; throw new TypeError('connection lost'); }
       return json({ id: 'catalog' });
     }
-    if (url.includes('alt=media')) return options.headers['If-Match'] === String(version) ? json(data) : json({}, 412);
-    return json({ etag: String(version), labels: { trashed: false } });
+    if (url.includes('alt=media')) {
+      // Les validateurs du contenu et des métadonnées ne sont pas interchangeables.
+      if (options.headers['If-Match']) return json({}, 412);
+      return new URL(url).searchParams.get('revisionId') === 'revision-' + version ? json(data) : json({}, 404);
+    }
+    return json({ etag: String(version), headRevisionId: 'revision-' + version, labels: { trashed: false } });
   };
   return { fetcher, get data() { return data; }, get writes() { return writes; }, conflict() { conflict = true; }, loseResponse() { lost = true; } };
 }
@@ -63,6 +67,51 @@ test('créations concurrentes : conflit 412, relecture, nouvel entier', async ()
   const server = registryServer(); server.conflict();
   assert.equal((await makeDrive(server.fetcher).createMerchant(details)).id, 2);
   assert.deepEqual(server.data.merchants.map(item => item.id), [1, 2]);
+});
+test('lecture Drive : révision explicite, sans ETag de métadonnées sur le contenu', async () => {
+  const result = await makeDrive(registryServer().fetcher).readCatalog('catalog');
+  assert.deepEqual(result.data, catalog([]));
+  assert.equal(result.etag, '1');
+});
+test('modification pendant la lecture : snapshot cohérent puis conflit à l’écriture', async () => {
+  let version = 1, data = catalog([]), writes = 0, changed = false;
+  const revisions = new Map([['r1', data]]);
+  const drive = makeDrive(async (url, options) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/drive/v3/files') return json({ files: [{ id: 'catalog', createdTime: '2026-10-15' }] });
+    if (options.method === 'PUT') {
+      if (options.headers['If-Match'] !== 'file-' + version) return json({}, 412);
+      data = JSON.parse(options.body); writes++; return json({ id: 'catalog' });
+    }
+    if (parsed.searchParams.get('alt') === 'media') {
+      assert.equal(options.headers['If-Match'], undefined);
+      if (!changed) { changed = true; version++; data = catalog([{ ...entry, name: 'Autre magasin' }]); revisions.set('r2', data); }
+      return json(revisions.get(parsed.searchParams.get('revisionId')));
+    }
+    return json({ etag: 'file-' + version, headRevisionId: 'r' + version, labels: { trashed: false } });
+  });
+  assert.equal((await drive.createMerchant(details)).id, 2);
+  assert.deepEqual(data.merchants.map(item => item.id), [1, 2]);
+  assert.equal(writes, 1);
+});
+test('révision disparue pendant la lecture : relire les métadonnées et réessayer', async () => {
+  let reads = 0;
+  const result = await makeDrive(async url => {
+    const parsed = new URL(url);
+    if (parsed.searchParams.get('alt') === 'media') return parsed.searchParams.get('revisionId') === 'r1' ? json({}, 404) : json(catalog([entry]));
+    reads++; return json({ etag: 'e' + reads, headRevisionId: 'r' + reads, labels: { trashed: false } });
+  }).readCatalog('catalog');
+  assert.equal(reads, 2); assert.equal(result.etag, 'e2'); assert.equal(result.data.merchants[0].id, 1);
+});
+test('révision indisponible durablement : arrêt explicite sans écriture', async () => {
+  let downloads = 0;
+  const drive = makeDrive(async (url, options) => {
+    assert.equal(options.method, undefined);
+    if (url.includes('alt=media')) { downloads++; return json({}, 404); }
+    return json({ etag: 'e1', headRevisionId: 'r1', labels: { trashed: false } });
+  });
+  await assert.rejects(drive.readCatalog('catalog'), /Impossible de lire une version stable/);
+  assert.equal(downloads, 3);
 });
 test('création confirmée mais réponse perdue : réessayer retrouve la fiche', async () => {
   const server = registryServer(), drive = makeDrive(server.fetcher); server.loseResponse();

@@ -41,8 +41,12 @@ let browser;
       const parts = req.postData().split('\r\n\r\n'); catalog = JSON.parse(parts[2].split('\r\n--')[0]); return reply({ id: 'catalog' });
     }
     if (parsed.pathname === '/drive/v2/files/catalog') {
-      if (parsed.searchParams.get('alt') === 'media') return reply(catalog);
-      return reply({ etag: String(version), labels: { trashed: false } });
+      if (parsed.searchParams.get('alt') === 'media') {
+        if (req.headers()['if-match']) return reply({}, 412);
+        if (parsed.searchParams.get('revisionId') !== 'revision-' + version) return reply({}, 404);
+        return reply(catalog);
+      }
+      return reply({ etag: String(version), headRevisionId: 'revision-' + version, labels: { trashed: false } });
     }
     if (parsed.pathname === '/upload/drive/v2/files/catalog') {
       if (req.headers()['if-match'] !== String(version)) return reply({}, 412);

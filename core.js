@@ -124,16 +124,20 @@
       return files.sort((a, b) => a.createdTime.localeCompare(b.createdTime) || a.id.localeCompare(b.id));
     }
     async readCatalog(id) {
-      // v2 expose l'ETag dans le JSON : pas de dépendance aux en-têtes CORS.
+      // L'ETag décrit la ressource File, pas la représentation alt=media.
+      // Lire la révision désignée par ces métadonnées donne un contenu cohérent
+      // sans envoyer cet ETag au téléchargement. Il reste utilisé à l'écriture.
       const url = `https://www.googleapis.com/drive/v2/files/${encodeURIComponent(id)}`;
       for (let attempt = 0; attempt < 3; attempt++) {
-        const metadata = await (await this.request(`${url}?fields=etag,labels`, { cache: 'no-store' })).json();
+        const metadata = await (await this.request(`${url}?fields=etag,labels,headRevisionId`, { cache: 'no-store' })).json();
         if (metadata.labels?.trashed || !metadata.etag) throw new Error('Le répertoire des enseignes est indisponible. Réessayez.');
-        const response = await this.request(`${url}?alt=media`, { cache: 'no-store', headers: { 'If-Match': metadata.etag } }, [412]);
-        if (response.status === 412) continue;
+        if (!metadata.headRevisionId) continue;
+        const params = new URLSearchParams({ alt: 'media', revisionId: metadata.headRevisionId });
+        const response = await this.request(`${url}?${params}`, { cache: 'no-store' }, [404]);
+        if (response.status === 404) continue;
         return { id, etag: metadata.etag, data: validateCatalog(await response.json()) };
       }
-      throw new Error('Le répertoire vient de changer sur un autre appareil. Réessayez.');
+      throw new Error('Impossible de lire une version stable du répertoire. Actualisez les enseignes puis réessayez.');
     }
     async catalog(create = false) {
       let files = await this.catalogFiles();
