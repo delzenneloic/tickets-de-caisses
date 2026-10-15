@@ -3,7 +3,7 @@
 // Identifiant public repris de l'application Muscu fournie. Aucun secret à ajouter.
 const CLIENT_ID = '4855509636-ivkbqfrh8q2f7orpj50e7cgltkfm2vda.apps.googleusercontent.com';
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const { naming, fileInfo, Drive, ROOT_NAME } = TicketCore;
+const { naming, merchantId, filterMerchants, fileInfo, Drive, ROOT_NAME } = TicketCore;
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const byteSize = bytes => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} Ko` : `${(bytes / 1024 / 1024).toLocaleString('fr-BE', { maximumFractionDigits: 1 })} Mo`;
@@ -12,6 +12,8 @@ let db, records = [], token = null, account = null, tokenClient = null;
 let busy = false, adding = false, connecting = false, ready = false, activeId = null, progressValue = 0;
 let currentView = 'add', rootFolderId = null, lastTimestamp = 0;
 let previewUrl = null;
+let merchants = [], selectedMerchant = null, merchantsReady = false, loadingMerchants = false, creatingMerchant = false;
+let merchantLoadVersion = 0, activeMerchantIndex = -1;
 const thumbnails = new Map();
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel(DB_NAME) : null;
 const drive = new Drive({ getToken: () => token && token.expires > Date.now() + 10000 ? token.value : null, onExpired: () => { token = null; renderConnection(); } });
@@ -52,7 +54,48 @@ function renderConnection() {
   button.textContent = connecting ? 'Connexion…' : valid && account ? 'Drive connecté' : account ? 'Reconnecter Google Drive' : 'Connecter Google Drive';
   button.title = valid && account ? `${account.emailAddress || account.displayName} — cliquer pour déconnecter` : 'Se connecter à Google Drive';
   button.classList.toggle('connected', valid && !!account);
-  button.disabled = busy || connecting || adding;
+  button.disabled = busy || connecting || adding || creatingMerchant;
+}
+function closeMerchantOptions() {
+  $('merchant-options').hidden = true; $('merchant-search').setAttribute('aria-expanded', 'false');
+  $('merchant-search').removeAttribute('aria-activedescendant'); activeMerchantIndex = -1;
+}
+function renderMerchantOptions() {
+  const matches = filterMerchants(merchants, $('merchant-search').value);
+  $('merchant-options').innerHTML = matches.length ? matches.map((item, index) => `<li id="merchant-option-${item.id}" role="option" aria-selected="${index === activeMerchantIndex}" data-merchant="${item.id}"><strong>${esc(item.name)}</strong><span>${merchantId(item.id)} · ${esc(item.address)}</span></li>`).join('') : '<li class="no-match" role="presentation">Aucune enseigne correspondante. Utilisez « Nouvelle enseigne ».</li>';
+  return matches;
+}
+function renderMerchants() {
+  const disabled = busy || adding || connecting || creatingMerchant || loadingMerchants || !ready;
+  $('merchant-search').disabled = disabled || !merchantsReady || !account;
+  $('new-merchant').disabled = disabled || !account || !navigator.onLine;
+  $('refresh-merchants').disabled = disabled || !account || !navigator.onLine;
+  $('merchant-help').textContent = loadingMerchants ? 'Chargement des enseignes depuis Google Drive…' : !account ? 'Connectez Google Drive pour retrouver vos enseignes sur tous vos appareils.' : !merchantsReady ? 'Le répertoire est indisponible. Actualisez les enseignes pour réessayer.' : 'Tapez une partie du nom, puis sélectionnez une enseigne. Les nouveaux tickets du lot lui seront associés.';
+  $('merchant-selection').textContent = selectedMerchant ? `${merchantId(selectedMerchant.id)} · ${selectedMerchant.name} · ${selectedMerchant.address} · TVA ${selectedMerchant.vatNumber}` : 'Aucune enseigne sélectionnée.';
+  if (disabled) closeMerchantOptions();
+}
+function selectMerchant(item) {
+  selectedMerchant = item; $('merchant-search').value = item.name; closeMerchantOptions(); render();
+}
+async function loadMerchants() {
+  if (!account) return;
+  const version = ++merchantLoadVersion, accountId = account.permissionId;
+  loadingMerchants = true; merchantsReady = false; render();
+  try {
+    const list = await drive.merchants();
+    if (version !== merchantLoadVersion || account?.permissionId !== accountId) return;
+    merchants = list; merchantsReady = true;
+    if (selectedMerchant) {
+      selectedMerchant = list.find(item => item.id === selectedMerchant.id) || null;
+      $('merchant-search').value = selectedMerchant?.name || '';
+    }
+  } catch (error) {
+    if (version === merchantLoadVersion) { selectedMerchant = null; merchants = []; notify(error.message, 'error'); }
+  } finally { if (version === merchantLoadVersion) { loadingMerchants = false; render(); } }
+}
+function resetMerchants() {
+  merchantLoadVersion++; merchants = []; selectedMerchant = null; merchantsReady = false; loadingMerchants = false;
+  $('merchant-search').value = ''; closeMerchantOptions();
 }
 function thumbnail(item) {
   if (item.mimeType.startsWith('image/') && !/hei[cf]|tiff/.test(item.mimeType)) {
@@ -74,16 +117,16 @@ function render() {
   $('queue-list').innerHTML = pending.length ? pending.map(item => {
     const active = activeId === item.id;
     const wrongAccount = account && item.accountId && item.accountId !== account.permissionId;
-    return `<article class="ticket"><button type="button" class="thumbnail" data-preview="${item.id}" aria-label="Aperçu de ${esc(item.originalName)}">${thumbnail(item)}</button><div class="ticket-content"><p class="ticket-name">${esc(item.originalName)}</p><p class="ticket-meta">${byteSize(item.size)} · ${active ? `Envoi ${progressValue} %` : item.status === 'error' ? 'À réessayer' : 'Prêt à envoyer'}</p>${item.name ? `<p class="ticket-detail">${esc(item.month)}/${esc(item.name)}</p>` : ''}${wrongAccount ? `<p class="ticket-error">À envoyer avec ${esc(item.accountEmail || 'le compte du premier envoi')}.</p>` : item.error ? `<p class="ticket-error">${esc(item.error)}</p>` : ''}${active ? `<progress max="100" value="${progressValue}" aria-label="Progression de l’envoi"></progress>` : ''}</div><button type="button" class="remove" data-remove="${item.id}" aria-label="Retirer ${esc(item.originalName)} de la liste d’envoi" ${busy || adding ? 'disabled' : ''}>×</button></article>`;
+    return `<article class="ticket"><button type="button" class="thumbnail" data-preview="${item.id}" aria-label="Aperçu de ${esc(item.originalName)}">${thumbnail(item)}</button><div class="ticket-content"><p class="ticket-name">${esc(item.originalName)}</p><p class="ticket-meta">${byteSize(item.size)} · ${active ? `Envoi ${progressValue} %` : item.status === 'error' ? 'À réessayer' : 'Prêt à envoyer'}</p>${item.name ? `<p class="ticket-detail">${esc(item.merchantName || 'Enseigne à choisir')} · ${esc(item.month)}/A traiter/${esc(item.name)}</p>` : ''}${wrongAccount ? `<p class="ticket-error">À envoyer avec ${esc(item.accountEmail || 'le compte du premier envoi')}.</p>` : item.error ? `<p class="ticket-error">${esc(item.error)}</p>` : ''}${active ? `<progress max="100" value="${progressValue}" aria-label="Progression de l’envoi"></progress>` : ''}</div><button type="button" class="remove" data-remove="${item.id}" aria-label="Retirer ${esc(item.originalName)} de la liste d’envoi" ${busy || adding ? 'disabled' : ''}>×</button></article>`;
   }).join('') : '<div class="empty"><p>Aucun ticket en attente</p><p class="sub">Les tickets ajoutés apparaîtront ici avant l’envoi.</p></div>';
   $('queue-list').querySelectorAll('img').forEach(img => { img.onerror = () => { img.replaceWith(document.createTextNode('PHOTO')); }; });
   $('send-bar').hidden = !pending.length;
   $('send').textContent = busy ? 'Envoi en cours…' : `Envoyer ${pending.length > 1 ? `les ${pending.length} tickets` : 'le ticket'} vers Drive`;
-  $('send').disabled = busy || adding || connecting || !ready || !navigator.onLine;
-  $('send-note').textContent = !navigator.onLine ? 'Hors ligne. Vos tickets restent sur cet appareil.' : 'Conservés sur cet appareil jusqu’à confirmation de Google Drive.';
+  $('send').disabled = busy || adding || connecting || creatingMerchant || loadingMerchants || !ready || !navigator.onLine || !merchantsReady || !selectedMerchant;
+  $('send-note').textContent = !navigator.onLine ? 'Hors ligne. Vos tickets restent sur cet appareil.' : !selectedMerchant ? 'Sélectionnez une enseigne pour pouvoir envoyer les tickets.' : 'Conservés sur cet appareil jusqu’à confirmation de Google Drive.';
   $('camera-button').disabled = !ready || busy || adding;
   $('files-button').disabled = !ready || busy || adding;
-  renderConnection(); renderHistory();
+  renderConnection(); renderMerchants(); renderHistory();
 }
 function renderHistory() {
   $('open-folder').hidden = !rootFolderId || !account;
@@ -98,7 +141,7 @@ function renderHistory() {
     const heading = month !== item.month ? `<h2 class="month-heading">${esc(item.month)}</h2>` : '';
     month = item.month;
     const date = new Date(item.sentAt).toLocaleString('fr-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-    return `${heading}<article class="ticket"><div class="thumbnail" aria-hidden="true">${esc(item.extension.toUpperCase())}</div><div class="ticket-content"><p class="ticket-name">${esc(item.name)}</p><p class="ticket-meta ticket-success">Enregistré · ${esc(date)}</p><p class="ticket-detail">${esc(item.originalName)} · ${byteSize(item.size)}</p></div><a class="ticket-link" href="https://drive.google.com/file/d/${encodeURIComponent(item.driveId)}/view" target="_blank" rel="noopener noreferrer" aria-label="Ouvrir ${esc(item.name)} dans Google Drive">↗</a></article>`;
+    return `${heading}<article class="ticket"><div class="thumbnail" aria-hidden="true">${esc(item.extension.toUpperCase())}</div><div class="ticket-content"><p class="ticket-name">${esc(item.name)}</p><p class="ticket-meta ticket-success">Enregistré · ${esc(date)}</p><p class="ticket-detail">${item.merchantName ? esc(item.merchantName) + ' · ' : ''}${esc(item.originalName)} · ${byteSize(item.size)}</p></div><a class="ticket-link" href="https://drive.google.com/file/d/${encodeURIComponent(item.driveId)}/view" target="_blank" rel="noopener noreferrer" aria-label="Ouvrir ${esc(item.name)} dans Google Drive">↗</a></article>`;
   }).join('') : '<div class="empty"><p>Aucun ticket envoyé depuis cet appareil</p><p class="sub">Vos prochains envois apparaîtront ici.</p></div>';
 }
 function showView(view) {
@@ -137,8 +180,10 @@ window.gsiLoaded = function () {
         token = { value: response.access_token, expires: Date.now() + Number(response.expires_in) * 1000 };
         try {
           const user = await drive.account();
+          if (account?.permissionId !== user.permissionId) resetMerchants();
           account = user; rootFolderId = null; drive.folders.clear();
           connecting = false; render(); notify(`Google Drive connecté : ${user.emailAddress || user.displayName}.`);
+          await loadMerchants();
         } catch (error) { token = null; connecting = false; render(); notify(error.message, 'error'); }
       },
       error_callback: error => {
@@ -151,7 +196,7 @@ window.gsiLoaded = function () {
 };
 window.gsiFailed = () => { connecting = false; notify('La connexion Google n’a pas pu charger. Vérifiez internet puis rechargez la page ; vos tickets restent disponibles.', 'error'); renderConnection(); };
 function connect() {
-  if (busy || connecting || adding) return;
+  if (busy || connecting || adding || creatingMerchant) return;
   if (!navigator.onLine) { notify('Connectez-vous à internet pour accéder à Google Drive.', 'error'); return; }
   if (!tokenClient) { window.gsiFailed(); return; }
   connecting = true; render();
@@ -160,12 +205,13 @@ function connect() {
 }
 $('connect').addEventListener('click', () => {
   if (token && token.expires > Date.now() + 10000 && account) {
-    token = null; account = null; rootFolderId = null; drive.folders.clear(); render(); notify('Google Drive déconnecté sur cet appareil.');
+    token = null; account = null; rootFolderId = null; drive.folders.clear(); resetMerchants(); render(); notify('Google Drive déconnecté sur cet appareil.');
   } else connect();
 });
 
 async function uploadBatch() {
-  if (busy || adding || !ready) return;
+  if (busy || adding || connecting || creatingMerchant || loadingMerchants || !ready) return;
+  if (!selectedMerchant || !merchantsReady) { notify('Sélectionnez une enseigne avant d’envoyer le ticket.', 'error'); return; }
   if (!navigator.onLine) { notify('Hors ligne. Reconnectez-vous à internet pour envoyer les tickets.', 'error'); return; }
   if (!token || token.expires <= Date.now() + 10000 || !account) {
     connect(); notify('Connectez Google Drive, puis touchez de nouveau « Envoyer vers Drive ».'); return;
@@ -176,6 +222,9 @@ async function uploadBatch() {
     let sent = 0, failed = 0, blocked = 0;
     try {
       await refresh();
+      const chosenMerchant = selectedMerchant;
+      const currentMerchants = await drive.merchants();
+      if (!currentMerchants.some(item => item.id === chosenMerchant.id)) throw new Error('L’enseigne sélectionnée n’est plus disponible. Actualisez le répertoire.');
       // Actualiser les dossiers à chaque lot : un dossier supprimé n'est pas conservé en mémoire.
       drive.folders.clear();
       rootFolderId = null;
@@ -184,14 +233,21 @@ async function uploadBatch() {
         if (item.accountId && item.accountId !== account.permissionId) { blocked++; continue; }
         activeId = item.id; progressValue = 0; item.error = ''; render();
         try {
+          if (item.merchantId && !currentMerchants.some(merchant => merchant.id === item.merchantId)) throw new Error('L’enseigne de ce ticket est introuvable dans le répertoire Drive.');
+          if (!item.merchantId) {
+            item.merchantId = chosenMerchant.id; item.merchantName = chosenMerchant.name;
+            item.accountId = account.permissionId; item.accountEmail = account.emailAddress || account.displayName;
+            if (item.name) { item.name = `${merchantId(item.merchantId)}.${item.name}`; item.folderId = null; item.sessionUrl = null; }
+            await save(item);
+          }
           if (!rootFolderId) rootFolderId = await drive.folder(ROOT_NAME);
           if (!item.name) {
             const milliseconds = Math.max(Date.now(), lastTimestamp + 1);
             lastTimestamp = milliseconds;
-            Object.assign(item, naming(new Date(milliseconds), item.extension), { firstAttemptAt: new Date(milliseconds).toISOString(), accountId: account.permissionId, accountEmail: account.emailAddress || account.displayName });
+            Object.assign(item, naming(new Date(milliseconds), item.extension, item.merchantId), { firstAttemptAt: new Date(milliseconds).toISOString(), accountId: account.permissionId, accountEmail: account.emailAddress || account.displayName });
             await save(item);
           }
-          if (!item.folderId) { item.folderId = await drive.folder(item.month, rootFolderId); await save(item); }
+          if (!item.folderId) { item.folderId = await drive.receiptFolder(item.month, rootFolderId); await save(item); }
           const result = await drive.upload(item, save, percent => {
             progressValue = percent;
             const progress = $('queue-list').querySelector('progress');
@@ -225,6 +281,59 @@ async function uploadBatch() {
   else await run(undefined);
 }
 $('send').addEventListener('click', () => uploadBatch().catch(error => notify(error.message, 'error')));
+$('merchant-search').addEventListener('focus', () => {
+  activeMerchantIndex = -1; renderMerchantOptions(); $('merchant-options').hidden = false; $('merchant-search').setAttribute('aria-expanded', 'true');
+});
+$('merchant-search').addEventListener('input', () => {
+  selectedMerchant = null; activeMerchantIndex = -1; $('merchant-search').removeAttribute('aria-activedescendant'); render();
+  renderMerchantOptions(); $('merchant-options').hidden = false; $('merchant-search').setAttribute('aria-expanded', 'true');
+});
+$('merchant-search').addEventListener('keydown', event => {
+  if (event.key === 'Escape' || event.key === 'Tab') { closeMerchantOptions(); return; }
+  if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
+  if (event.key === 'Enter' && $('merchant-options').hidden) return;
+  event.preventDefault();
+  const matches = filterMerchants(merchants, $('merchant-search').value);
+  if (event.key === 'Enter') { if (matches[activeMerchantIndex]) selectMerchant(matches[activeMerchantIndex]); return; }
+  activeMerchantIndex = matches.length ? (activeMerchantIndex + (event.key === 'ArrowDown' ? 1 : -1) + matches.length) % matches.length : -1;
+  renderMerchantOptions(); $('merchant-options').hidden = false; $('merchant-search').setAttribute('aria-expanded', 'true');
+  if (matches[activeMerchantIndex]) {
+    const id = 'merchant-option-' + matches[activeMerchantIndex].id;
+    $('merchant-search').setAttribute('aria-activedescendant', id); $(id).scrollIntoView({ block: 'nearest' });
+  }
+});
+$('merchant-options').addEventListener('mousedown', event => event.preventDefault());
+$('merchant-options').addEventListener('click', event => {
+  const option = event.target.closest('[data-merchant]');
+  if (option) { selectMerchant(merchants.find(item => item.id === Number(option.dataset.merchant))); $('merchant-search').focus(); closeMerchantOptions(); }
+});
+document.addEventListener('click', event => { if (!event.target.closest('.combobox')) closeMerchantOptions(); });
+$('merchant-search').addEventListener('blur', closeMerchantOptions);
+$('refresh-merchants').addEventListener('click', loadMerchants);
+$('new-merchant').addEventListener('click', () => {
+  $('merchant-form').reset(); $('merchant-name').value = selectedMerchant ? '' : $('merchant-search').value.trim();
+  $('merchant-error').textContent = ''; $('merchant-dialog').showModal(); $('merchant-name').focus();
+});
+$('cancel-merchant').addEventListener('click', () => $('merchant-dialog').close());
+$('merchant-dialog').addEventListener('cancel', event => { if (creatingMerchant) event.preventDefault(); });
+$('merchant-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (creatingMerchant || !account) return;
+  creatingMerchant = true; render(); $('merchant-error').textContent = '';
+  const fields = { name: $('merchant-name').value, address: $('merchant-address').value, vatNumber: $('merchant-vat').value };
+  for (const control of $('merchant-form').elements) control.disabled = true;
+  $('save-merchant').textContent = 'Enregistrement…';
+  try {
+    const create = () => drive.createMerchant(fields);
+    const item = navigator.locks ? await navigator.locks.request(DB_NAME + ':merchants:' + account.permissionId, create) : await create();
+    merchants = [...merchants.filter(merchant => merchant.id !== item.id), item]; merchantsReady = true;
+    selectMerchant(item); $('merchant-dialog').close(); notify(`Enseigne ${item.name} enregistrée sous le numéro ${merchantId(item.id)}.`, 'success');
+  } catch (error) { $('merchant-error').textContent = error.message; }
+  finally {
+    creatingMerchant = false; for (const control of $('merchant-form').elements) control.disabled = false;
+    $('save-merchant').textContent = 'Créer et sélectionner'; render();
+  }
+});
 $('camera-button').addEventListener('click', () => $('camera-input').click());
 $('files-button').addEventListener('click', () => $('files-input').click());
 for (const id of ['camera-input', 'files-input']) $(id).addEventListener('change', event => { const files = [...event.target.files]; event.target.value = ''; addFiles(files).catch(error => notify(error.message, 'error')); });
@@ -268,7 +377,7 @@ window.addEventListener('dragover', event => event.preventDefault());
 window.addEventListener('drop', event => event.preventDefault());
 window.addEventListener('offline', () => { render(); if (!busy) notify('Hors ligne. Vous pouvez ajouter des tickets ; l’envoi sera possible au retour d’internet.'); });
 window.addEventListener('online', () => { render(); if (!busy) notify('Connexion rétablie. Vous pouvez envoyer vos tickets en attente.'); });
-window.addEventListener('beforeunload', event => { if (busy || adding) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (busy || adding || creatingMerchant) { event.preventDefault(); event.returnValue = ''; } });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !busy && !adding && ready) refresh().catch(() => {}); });
 
 async function init() {

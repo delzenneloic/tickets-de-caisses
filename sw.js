@@ -1,7 +1,7 @@
 'use strict';
 // Le préfixe et le périmètre protègent les caches des autres applications du domaine.
 const PREFIX = 'tickets-de-caisses-' + encodeURIComponent(self.registration.scope) + '-';
-const CACHE = PREFIX + 'v1';
+const CACHE = PREFIX + 'v2';
 const ASSETS = ['./', './index.html', './style.css', './core.js', './app.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png', './LIRE-MOI.md'];
 const ASSET_URLS = new Set(ASSETS.map(path => new URL(path, self.registration.scope).href));
 self.addEventListener('install', event => {

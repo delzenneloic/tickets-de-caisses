@@ -20,6 +20,19 @@
     <div id="message" class="notice" role="status" aria-live="polite" hidden></div>
     <section id="add-view" aria-labelledby="add-title">
       <div class="section-heading"><h1 id="add-title">Ajouter un ticket</h1><span class="eyebrow" id="current-month"></span></div>
+      <section class="merchant-card" aria-labelledby="merchant-label">
+        <label id="merchant-label" for="merchant-search">Enseigne <span class="muted">· obligatoire pour envoyer</span></label>
+        <div class="merchant-controls">
+          <div class="combobox">
+            <input id="merchant-search" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="merchant-options" aria-describedby="merchant-help merchant-selection" autocomplete="off" placeholder="Rechercher un magasin, un restaurant…" disabled>
+            <ul id="merchant-options" role="listbox" aria-label="Enseignes" hidden></ul>
+          </div>
+          <button id="new-merchant" type="button" disabled>Nouvelle enseigne</button>
+          <button id="refresh-merchants" type="button" aria-label="Actualiser les enseignes" disabled>↻</button>
+        </div>
+        <p id="merchant-help" class="muted">Connectez Google Drive pour retrouver vos enseignes sur tous vos appareils.</p>
+        <p id="merchant-selection" class="merchant-selection" aria-live="polite"></p>
+      </section>
       <div class="capture-card" id="drop-zone">
         <div class="receipt-symbol" aria-hidden="true"><svg viewBox="0 0 48 56" fill="none"><path d="M9 4l5 3 5-3 5 3 5-3 5 3 5-3v48l-5-3-5 3-5-3-5 3-5-3-5 3V4Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M17 19h14M17 27h14M17 37h6m5 0h3" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div>
         <h2>Un ticket, et c’est classé.</h2>
@@ -32,7 +45,7 @@
         <input id="camera-input" type="file" accept="image/*" capture="environment" hidden>
         <input id="files-input" type="file" accept="image/*,application/pdf,.heic,.heif" multiple hidden>
       </div>
-      <div class="destination"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 3h9v12H3V6Z"/></svg><div><span class="muted">Classement automatique dans Google Drive</span><p>tickets de caisses <span class="slash">/</span> <strong id="folder-month"></strong></p></div></div>
+      <div class="destination"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 3h9v12H3V6Z"/></svg><div><span class="muted">Classement automatique dans Google Drive</span><p>tickets de caisses <span class="slash">/</span> <strong id="folder-month"></strong> <span class="slash">/</span> A traiter</p></div></div>
       <section class="queue-section" aria-labelledby="queue-title">
         <div class="section-heading"><h2 id="queue-title">À envoyer <span id="queue-count" class="count">0</span></h2></div>
         <div id="queue-list"></div>
@@ -46,8 +59,9 @@
     </section>
     <details class="help">
       <summary>Comment ça marche ?</summary>
-      <p>Connectez votre compte Google, ajoutez un ou plusieurs tickets, puis touchez « Envoyer vers Drive ». Les dossiers sont créés au premier envoi.</p>
-      <p>Chaque fichier porte la date et l’heure locale du début de son premier envoi, avec trois chiffres pour les millisecondes. Exemple : <code>2026.09.12.091530.398.jpg</code>. Le mois correspond à cette même date.</p>
+      <p>Connectez votre compte Google, choisissez une enseigne (ou créez sa fiche), ajoutez un ou plusieurs tickets de cette enseigne, puis touchez « Envoyer vers Drive ». Les nouveaux tickets du lot sont liés à l’enseigne choisie. Une reprise conserve l’enseigne du premier envoi.</p>
+      <p>Les enseignes et leurs identifiants sont partagés entre vos appareils dans le fichier <code>enseignes.json</code> de votre Drive. La recherche accepte une partie du nom, sans distinction de casse ni d’accent.</p>
+      <p>Chaque fichier commence par l’identifiant de l’enseigne sur six chiffres, suivi de la date et de l’heure locale du premier envoi. Exemple : <code>000042.2026.09.12.091530.398.jpg</code>, dans <code>tickets de caisses/2026.09/A traiter</code>.</p>
       <p>Les tickets en attente sont conservés dans ce navigateur jusqu’à confirmation de Google Drive. Gardez l’application ouverte pendant l’envoi. Si la connexion coupe, relancez l’envoi : il reprend sans créer un second fichier.</p>
       <p>Pour l’installer sur votre téléphone, utilisez « Ajouter à l’écran d’accueil » ou « Installer l’application » dans le menu du navigateur. Une connexion internet est nécessaire pour envoyer les tickets.</p>
       <p>La connexion Google utilise le même identifiant d’application que votre suivi musculation. Si Google refuse l’adresse du site, consultez le guide <a href="./LIRE-MOI.md" target="_blank" rel="noopener">LIRE-MOI</a>.</p>
@@ -58,6 +72,17 @@
     <button type="button" id="tab-history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v19l-3-2-4 2-4-2-3 2V3Zm4 5h6m-6 4h6m-6 4h3"/></svg>Envoyés</button>
   </nav>
   <dialog id="preview-dialog"><div class="preview-top"><h2>Aperçu du ticket</h2><button id="close-preview" type="button" aria-label="Fermer l’aperçu">Fermer</button></div><div id="preview-content"></div><p id="preview-name"></p></dialog>
+  <dialog id="merchant-dialog" aria-labelledby="merchant-dialog-title">
+    <form id="merchant-form">
+      <h2 id="merchant-dialog-title">Nouvelle enseigne</h2>
+      <p class="muted">La fiche sera enregistrée dans votre Google Drive et un identifiant entier lui sera attribué automatiquement.</p>
+      <label for="merchant-name">Nom</label><input id="merchant-name" name="name" required maxlength="160" autocomplete="organization">
+      <label for="merchant-address">Adresse</label><textarea id="merchant-address" name="address" required maxlength="500" rows="3" autocomplete="street-address"></textarea>
+      <label for="merchant-vat">Numéro de TVA</label><input id="merchant-vat" name="vatNumber" required maxlength="40" placeholder="Ex. BE 0123.456.789">
+      <p id="merchant-error" class="ticket-error" role="alert"></p>
+      <div class="dialog-actions"><button id="cancel-merchant" type="button">Annuler</button><button id="save-merchant" class="primary" type="submit">Créer et sélectionner</button></div>
+    </form>
+  </dialog>
   <noscript><p>Activez JavaScript pour utiliser cette application.</p></noscript>
   <script src="./core.js"></script>
   <script src="./app.js"></script>
